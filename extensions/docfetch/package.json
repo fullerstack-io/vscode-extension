@@ -1,0 +1,192 @@
+{
+  "name": "docfetch",
+  "displayName": "DocFetch",
+  "description": "Fetch Confluence documents as Markdown for local reference and context",
+  "version": "0.1.0",
+  "publisher": "fullerstack-io",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "confluence",
+    "documentation",
+    "markdown",
+    "fetch",
+    "sync"
+  ],
+  "activationEvents": [
+    "workspaceContains:.docs",
+    "onCommand:docfetch.configureConnection"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "docfetch.searchDocuments",
+        "title": "DocFetch: Search Confluence Documents",
+        "icon": "$(search)"
+      },
+      {
+        "command": "docfetch.fetchByUrl",
+        "title": "DocFetch: Fetch Document by URL",
+        "icon": "$(link)"
+      },
+      {
+        "command": "docfetch.syncDocument",
+        "title": "DocFetch: Sync Document",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "docfetch.syncAllDocuments",
+        "title": "DocFetch: Sync All Documents",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "docfetch.configureConnection",
+        "title": "DocFetch: Configure Confluence Connection",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "docfetch.openInConfluence",
+        "title": "DocFetch: Open in Confluence",
+        "icon": "$(link-external)"
+      }
+    ],
+    "configuration": {
+      "title": "DocFetch",
+      "properties": {
+        "docfetch.connections": {
+          "type": "array",
+          "default": [],
+          "description": "Configured Confluence connections",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Unique connection identifier"
+              },
+              "name": {
+                "type": "string",
+                "description": "Display name for this connection"
+              },
+              "baseUrl": {
+                "type": "string",
+                "description": "Confluence base URL (e.g., https://company.atlassian.net)"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["cloud", "datacenter"],
+                "description": "Confluence deployment type"
+              },
+              "authMethod": {
+                "type": "string",
+                "enum": ["apiToken", "oauth2", "pat"],
+                "description": "Authentication method"
+              }
+            },
+            "required": ["id", "name", "baseUrl", "type", "authMethod"]
+          }
+        },
+        "docfetch.defaultConnection": {
+          "type": "string",
+          "default": "",
+          "description": "ID of the default Confluence connection to use"
+        },
+        "docfetch.docsDirectory": {
+          "type": "string",
+          "default": ".docs",
+          "description": "Directory for storing fetched documents (relative to workspace root)"
+        },
+        "docfetch.subdirectories": {
+          "type": "object",
+          "default": {
+            "api-specs": "API specifications and technical documentation",
+            "context": "General context and reference documents",
+            "guides": "How-to guides and tutorials"
+          },
+          "description": "Subdirectory categories within the docs directory"
+        },
+        "docfetch.includeAttachments": {
+          "type": "boolean",
+          "default": false,
+          "description": "Download and store attachments locally"
+        }
+      }
+    },
+    "views": {
+      "explorer": [
+        {
+          "id": "docfetch.documents",
+          "name": "DocFetch Documents",
+          "when": "workspaceFolderCount > 0"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "docfetch.searchDocuments",
+          "when": "view == docfetch.documents",
+          "group": "navigation"
+        },
+        {
+          "command": "docfetch.syncAllDocuments",
+          "when": "view == docfetch.documents",
+          "group": "navigation"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "docfetch.syncDocument",
+          "when": "resourcePath =~ /\\.docs/",
+          "group": "navigation"
+        },
+        {
+          "command": "docfetch.openInConfluence",
+          "when": "resourcePath =~ /\\.docs/",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "docfetch.syncDocument",
+          "when": "resourcePath =~ /\\.docs/"
+        },
+        {
+          "command": "docfetch.openInConfluence",
+          "when": "resourcePath =~ /\\.docs/"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
+    "watch": "npm run compile -- --watch",
+    "pretest": "npm run compile",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0-rc.12",
+    "turndown": "^7.1.2",
+    "turndown-plugin-gfm": "^1.0.2",
+    "yaml": "^2.3.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/turndown": "^5.0.4",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "@vscode/vsce": "^2.22.0",
+    "esbuild": "^0.19.8",
+    "eslint": "^8.55.0",
+    "typescript": "^5.3.2"
+  }
+}

@@ -3,14 +3,30 @@
     {
       "path": ".",
       "name": "Root"
+    },
+    {
+      "path": "extensions/docfetch",
+      "name": "DocFetch Extension"
     }
-    // Add extension folders here as you create them:
-    // {
-    //   "path": "extensions/my-extension",
-    //   "name": "My Extension"
-    // }
   ],
   "settings": {
     "typescript.tsdk": "node_modules/typescript/lib"
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Run DocFetch Extension",
+        "type": "extensionHost",
+        "request": "launch",
+        "args": [
+          "--extensionDevelopmentPath=${workspaceFolder:DocFetch Extension}"
+        ],
+        "outFiles": [
+          "${workspaceFolder:DocFetch Extension}/out/**/*.js"
+        ],
+        "preLaunchTask": "npm: compile - extensions/docfetch"
+      }
+    ]
   }
 }

@@ -1,15 +1,13 @@
 {
   "version": "0.2.0",
   "configurations": [
-    // Add debug configurations for each extension here.
-    // Example:
-    // {
-    //   "name": "Run My Extension",
-    //   "type": "extensionHost",
-    //   "request": "launch",
-    //   "args": ["--extensionDevelopmentPath=${workspaceFolder}/extensions/my-extension"],
-    //   "outFiles": ["${workspaceFolder}/extensions/my-extension/out/**/*.js"],
-    //   "preLaunchTask": "npm: compile - extensions/my-extension"
-    // }
+    {
+      "name": "Run DocFetch Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/extensions/docfetch"],
+      "outFiles": ["${workspaceFolder}/extensions/docfetch/out/**/*.js"],
+      "preLaunchTask": "docfetch-compile"
+    }
   ]
 }
