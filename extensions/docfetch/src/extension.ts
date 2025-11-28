@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { CredentialStore } from './confluence/auth/credential-store';
-import { fetchByUrl, configureConnection } from './commands';
+import { fetchByUrl, configureConnection, searchDocuments } from './commands';
 
 /**
  * Extension activation.
@@ -37,15 +37,6 @@ export function deactivate(): void {
   console.log('DocFetch extension deactivated');
 }
 
-/**
- * Search Confluence documents.
- * TODO: Implement search with QuickPick UI
- */
-async function searchDocuments(): Promise<void> {
-  vscode.window.showInformationMessage(
-    'DocFetch: Search functionality coming soon! Use "Fetch by URL" for now.'
-  );
-}
 
 /**
  * Sync the currently open document.

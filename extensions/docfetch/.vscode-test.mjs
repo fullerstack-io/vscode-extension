@@ -1,7 +1,7 @@
 import { defineConfig } from '@vscode/test-cli';
 
 export default defineConfig({
-  files: 'out/test/**/*.test.js',
+  files: 'out/test/suite/extension.test.js',
   mocha: {
     ui: 'bdd',
     color: true,

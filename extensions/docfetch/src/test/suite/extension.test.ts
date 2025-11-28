@@ -1,14 +1,21 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 
-suite('Extension Test Suite', () => {
-  vscode.window.showInformationMessage('Starting DocFetch tests');
+describe('Extension Test Suite', () => {
+  before(async () => {
+    vscode.window.showInformationMessage('Starting DocFetch tests');
+    // Activate the extension
+    const ext = vscode.extensions.getExtension('fullerstack-io.docfetch');
+    if (ext && !ext.isActive) {
+      await ext.activate();
+    }
+  });
 
-  test('Extension should be present', () => {
+  it('Extension should be present', () => {
     assert.ok(vscode.extensions.getExtension('fullerstack-io.docfetch'));
   });
 
-  test('Commands should be registered', async () => {
+  it('Commands should be registered', async () => {
     const commands = await vscode.commands.getCommands(true);
 
     const expectedCommands = [
