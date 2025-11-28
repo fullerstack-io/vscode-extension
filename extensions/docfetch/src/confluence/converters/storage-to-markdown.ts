@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import TurndownService from 'turndown';
-import { gfm } from 'turndown-plugin-gfm';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { gfm } = require('turndown-plugin-gfm');
 import { ConfluenceDocument, DocumentFrontmatter } from '../types';
 
 export interface ConversionResult {
@@ -238,7 +239,7 @@ export class StorageToMarkdownConverter {
     this.turndown.addRule('details', {
       filter: 'details',
       replacement: (content, node) => {
-        const details = node as HTMLElement;
+        const details = node as Element;
         const summary = details.querySelector('summary');
         const summaryText = summary ? summary.textContent || 'Details' : 'Details';
         const bodyContent = content.replace(summaryText, '').trim();

@@ -120,7 +120,7 @@ export abstract class BaseConfluenceClient implements IConfluenceClient {
     let message = `HTTP ${response.status}`;
 
     try {
-      const body = await response.json();
+      const body = await response.json() as { message?: string; errorMessage?: string };
       message = body.message || body.errorMessage || message;
     } catch {
       // Ignore JSON parse errors

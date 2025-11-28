@@ -80,16 +80,29 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["cloud", "datacenter"],
+                "enum": [
+                  "cloud",
+                  "datacenter"
+                ],
                 "description": "Confluence deployment type"
               },
               "authMethod": {
                 "type": "string",
-                "enum": ["apiToken", "oauth2", "pat"],
+                "enum": [
+                  "apiToken",
+                  "oauth2",
+                  "pat"
+                ],
                 "description": "Authentication method"
               }
             },
-            "required": ["id", "name", "baseUrl", "type", "authMethod"]
+            "required": [
+              "id",
+              "name",
+              "baseUrl",
+              "type",
+              "authMethod"
+            ]
           }
         },
         "docfetch.defaultConnection": {
@@ -167,8 +180,11 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
+    "compile:tests": "tsc -p . --outDir out",
     "watch": "npm run compile -- --watch",
-    "pretest": "npm run compile",
+    "pretest": "npm run compile && npm run compile:tests",
+    "test": "vscode-test",
+    "test:unit": "mocha 'src/test/suite/unit/**/*.test.ts'",
     "lint": "eslint src --ext ts",
     "package": "vsce package"
   },
@@ -179,14 +195,23 @@
     "yaml": "^2.3.4"
   },
   "devDependencies": {
+    "@types/glob": "^9.0.0",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^20.10.0",
+    "@types/sinon": "^21.0.0",
     "@types/turndown": "^5.0.4",
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^6.13.0",
     "@typescript-eslint/parser": "^6.13.0",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^2.22.0",
     "esbuild": "^0.19.8",
     "eslint": "^8.55.0",
+    "glob": "^13.0.0",
+    "mocha": "^11.7.5",
+    "sinon": "^21.0.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.3.2"
   }
 }
