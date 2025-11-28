@@ -1,0 +1,16 @@
+{
+  "folders": [
+    {
+      "path": ".",
+      "name": "Root"
+    }
+    // Add extension folders here as you create them:
+    // {
+    //   "path": "extensions/my-extension",
+    //   "name": "My Extension"
+    // }
+  ],
+  "settings": {
+    "typescript.tsdk": "node_modules/typescript/lib"
+  }
+}
