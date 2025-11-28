@@ -87,11 +87,15 @@ export async function configureConnection(): Promise<ConnectionConfig | undefine
   const authOptions = deploymentType === 'cloud'
     ? [
         {
+          label: 'OAuth 2.0 (Recommended)',
+          description: 'Sign in with your Atlassian account via browser',
+          value: 'oauth2' as AuthMethod,
+        },
+        {
           label: 'API Token',
           description: 'Email + API token from id.atlassian.com',
           value: 'apiToken' as AuthMethod,
         },
-        // OAuth2 can be added later
       ]
     : [
         {
