@@ -1,7 +1,9 @@
 import { IConfluenceClient } from './base-client';
 import { CloudConfluenceClient } from './cloud-client';
+import { OAuthCloudConfluenceClient } from './oauth-cloud-client';
 import { ConnectionConfig } from '../types';
 import { AuthProvider, ApiTokenProvider } from '../auth/api-token-provider';
+import { OAuth2Provider } from '../auth/oauth2-provider';
 import { CredentialStore } from '../auth/credential-store';
 
 /**
@@ -21,7 +23,15 @@ export class ConfluenceClientFactory {
 
     switch (config.type) {
       case 'cloud':
-        client = new CloudConfluenceClient(config.baseUrl, authProvider);
+        if (config.authMethod === 'oauth2') {
+          // OAuth uses different API endpoint structure
+          client = new OAuthCloudConfluenceClient(
+            config.baseUrl,
+            authProvider as OAuth2Provider
+          );
+        } else {
+          client = new CloudConfluenceClient(config.baseUrl, authProvider);
+        }
         break;
       case 'datacenter':
         // For now, Data Center uses the same client structure
@@ -46,8 +56,7 @@ export class ConfluenceClientFactory {
       case 'apiToken':
         return new ApiTokenProvider(config.id, config.type, credentialStore);
       case 'oauth2':
-        // TODO: Implement OAuth2Provider
-        throw new Error('OAuth2 authentication not yet implemented');
+        return new OAuth2Provider(config.id, config.baseUrl, credentialStore);
       case 'pat':
         // PAT uses the same provider as API token for Data Center
         return new ApiTokenProvider(config.id, config.type, credentialStore);

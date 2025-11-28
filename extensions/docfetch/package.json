@@ -128,6 +128,11 @@
           "type": "boolean",
           "default": false,
           "description": "Download and store attachments locally"
+        },
+        "docfetch.oauth.clientId": {
+          "type": "string",
+          "default": "",
+          "description": "OAuth 2.0 Client ID from developer.atlassian.com (required for OAuth authentication)"
         }
       }
     },
