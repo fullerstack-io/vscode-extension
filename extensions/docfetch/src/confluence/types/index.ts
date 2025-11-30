@@ -110,10 +110,13 @@ export interface FetchOptions {
   includeContent?: boolean;
 }
 
+export type SortBy = 'relevance' | 'lastModified' | 'title';
+
 export interface SearchOptions {
   limit?: number;
   cursor?: string;
   spaceKey?: string;
+  sortBy?: SortBy;
 }
 
 // Space info

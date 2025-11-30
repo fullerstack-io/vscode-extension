@@ -3,11 +3,31 @@ import { selectConnection, getConnections } from './configureConnection';
 import { ConfluenceClientFactory } from '../confluence/clients/client-factory';
 import { CredentialStore } from '../confluence/auth/credential-store';
 import { DocsManager } from '../storage/docs-manager';
-import { SearchResult, ConnectionConfig, AuthenticationError } from '../confluence/types';
+import { SearchResult, ConnectionConfig, AuthenticationError, SortBy } from '../confluence/types';
 
 interface SearchQuickPickItem extends vscode.QuickPickItem {
   result?: SearchResult;
   action?: 'load-more' | 'no-results';
+}
+
+// Sort button interface with sort type identifier
+interface SortButton extends vscode.QuickInputButton {
+  sortBy: SortBy;
+}
+
+// Create all sort buttons (must be called after vscode is ready)
+function createSortButtons(currentSort: SortBy): SortButton[] {
+  const buttons: { sortBy: SortBy; icon: string; label: string }[] = [
+    { sortBy: 'relevance', icon: 'search', label: 'Relevance' },
+    { sortBy: 'lastModified', icon: 'calendar', label: 'Date' },
+    { sortBy: 'title', icon: 'case-sensitive', label: 'Title' },
+  ];
+
+  return buttons.map(({ sortBy, icon, label }) => ({
+    sortBy,
+    iconPath: new vscode.ThemeIcon(sortBy === currentSort ? `${icon}` : icon),
+    tooltip: sortBy === currentSort ? `Sorted by: ${label}` : `Sort by: ${label}`,
+  }));
 }
 
 /**
@@ -71,6 +91,7 @@ function resultsToQuickPickItems(
     description: `$(folder) ${result.spaceKey}`,
     detail: `${result.excerpt.substring(0, 100)}${result.excerpt.length > 100 ? '...' : ''} - ${formatDate(result.lastModified)}`,
     result,
+    alwaysShow: true, // Prevent local filtering from hiding server results
   }));
 
   if (hasMore) {
@@ -117,10 +138,12 @@ export async function searchDocuments(): Promise<void> {
 
   // Create QuickPick
   const quickPick = vscode.window.createQuickPick<SearchQuickPickItem>();
-  quickPick.title = `Search Confluence (${connection.name})`;
   quickPick.placeholder = 'Type to search documents...';
-  quickPick.matchOnDescription = true;
-  quickPick.matchOnDetail = true;
+  // Disable local filtering - we rely on server-side search
+  // Setting these to false prevents VS Code from hiding results
+  // that don't match the typed text exactly
+  quickPick.matchOnDescription = false;
+  quickPick.matchOnDetail = false;
 
   // Track current search state
   let currentQuery = '';
@@ -128,6 +151,22 @@ export async function searchDocuments(): Promise<void> {
   let currentCursor: string | undefined;
   let hasMore = false;
   let isLoading = false;
+  let currentSortBy: SortBy = 'relevance';
+
+  // Helper to update title with current sort
+  const updateTitle = () => {
+    const sortLabel = currentSortBy === 'relevance' ? 'Relevance'
+      : currentSortBy === 'lastModified' ? 'Date'
+      : 'Title';
+    quickPick.title = `Search Confluence (${connection.name}) - Sort: ${sortLabel}`;
+  };
+
+  // Set up sort buttons - show all three so user can pick
+  const updateButtons = () => {
+    quickPick.buttons = createSortButtons(currentSortBy);
+  };
+  updateButtons();
+  updateTitle();
 
   /**
    * Perform search and update QuickPick.
@@ -145,7 +184,7 @@ export async function searchDocuments(): Promise<void> {
     quickPick.busy = true;
 
     try {
-      const response = await client.search(query, { cursor, limit: 20 });
+      const response = await client.search(query, { cursor, limit: 20, sortBy: currentSortBy });
 
       if (cursor) {
         // Appending to existing results
@@ -193,6 +232,25 @@ export async function searchDocuments(): Promise<void> {
   quickPick.onDidChangeValue((value) => {
     if (value !== currentQuery) {
       debouncedSearch(value);
+    }
+  });
+
+  // Handle sort button click
+  quickPick.onDidTriggerButton((button) => {
+    const sortButton = button as SortButton;
+    if (sortButton.sortBy && sortButton.sortBy !== currentSortBy) {
+      currentSortBy = sortButton.sortBy;
+
+      // Update buttons and title
+      updateButtons();
+      updateTitle();
+
+      // Re-run search with new sort if we have a query
+      if (currentQuery.length >= 2) {
+        currentResults = [];
+        currentCursor = undefined;
+        performSearch(currentQuery);
+      }
     }
   });
 

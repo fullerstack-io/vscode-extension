@@ -26,6 +26,12 @@ export class StorageToMarkdownConverter {
     // Add GitHub Flavored Markdown support (tables, strikethrough, etc.)
     this.turndown.use(gfm);
 
+    // Remove all HTML tags that Turndown doesn't handle - extract text content only
+    this.turndown.remove(['script', 'style', 'noscript']);
+
+    // Keep these elements but let Turndown process their content
+    this.turndown.keep([]);
+
     // Add custom rules for Confluence-specific elements
     this.addConfluenceRules();
   }
@@ -95,20 +101,19 @@ export class StorageToMarkdownConverter {
       $el.replaceWith(`<blockquote>${titleHtml}${content}</blockquote>`);
     });
 
-    // Convert expand macro (collapsible sections)
+    // Convert expand macro (collapsible sections) - use blockquote with title
     $('ac\\:structured-macro[ac\\:name="expand"], structured-macro[name="expand"]').each((_, el) => {
       const $el = $(el);
       const title = $el.find('ac\\:parameter[ac\\:name="title"], parameter[name="title"]').text() || 'Details';
       const content = $el.find('ac\\:rich-text-body, rich-text-body').html() || '';
-      $el.replaceWith(`<details><summary>${title}</summary>${content}</details>`);
+      $el.replaceWith(`<blockquote><strong>${title}</strong><br/>${content}</blockquote>`);
     });
 
-    // Convert status macro
+    // Convert status macro - output as plain text badge
     $('ac\\:structured-macro[ac\\:name="status"], structured-macro[name="status"]').each((_, el) => {
       const $el = $(el);
-      const color = $el.find('ac\\:parameter[ac\\:name="colour"], parameter[name="colour"]').text();
       const title = $el.find('ac\\:parameter[ac\\:name="title"], parameter[name="title"]').text();
-      $el.replaceWith(`<span class="status status-${color}">[${title}]</span>`);
+      $el.replaceWith(`**[${title}]**`);
     });
 
     // Convert Confluence links to standard links
@@ -161,13 +166,52 @@ export class StorageToMarkdownConverter {
    * Post-process the converted Markdown.
    */
   private postprocess(markdown: string): string {
-    return markdown
-      // Remove excessive newlines (more than 2)
-      .replace(/\n{3,}/g, '\n\n')
-      // Fix escaped characters that don't need escaping in our context
-      .replace(/\\([_*])/g, '$1')
-      // Trim whitespace
-      .trim();
+    let result = markdown;
+
+    // Convert HTML entities to their actual characters
+    result = result.replace(/&nbsp;/g, ' ');
+    result = result.replace(/&amp;/g, '&');
+    result = result.replace(/&lt;/g, '<');
+    result = result.replace(/&gt;/g, '>');
+    result = result.replace(/&quot;/g, '"');
+    result = result.replace(/&#39;/g, "'");
+    result = result.replace(/&apos;/g, "'");
+    result = result.replace(/&hellip;/g, '...');
+    result = result.replace(/&mdash;/g, '—');
+    result = result.replace(/&ndash;/g, '–');
+    result = result.replace(/&lsquo;/g, "'");
+    result = result.replace(/&rsquo;/g, "'");
+    result = result.replace(/&ldquo;/g, '"');
+    result = result.replace(/&rdquo;/g, '"');
+    result = result.replace(/&bull;/g, '•');
+    result = result.replace(/&copy;/g, '©');
+    result = result.replace(/&reg;/g, '®');
+    result = result.replace(/&trade;/g, '™');
+    result = result.replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+    result = result.replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)));
+
+    // Remove any remaining HTML tags (but keep their content)
+    // This catches any tags that Turndown didn't handle
+    result = result.replace(/<(?!\/?(a|img)\b)[^>]+>/gi, (match) => {
+      // Keep <a> and <img> tags, remove everything else
+      if (match.startsWith('<a ') || match.startsWith('<img ') || match === '</a>') {
+        return match;
+      }
+      return '';
+    });
+
+    // Clean up empty links and images with special protocols
+    result = result.replace(/\[([^\]]*)\]\(confluence:\/\/[^)]+\)/g, '$1');
+    result = result.replace(/!\[([^\]]*)\]\(attachment:\/\/[^)]+\)/g, '[$1]');
+
+    // Remove excessive newlines (more than 2)
+    result = result.replace(/\n{3,}/g, '\n\n');
+
+    // Fix escaped characters that don't need escaping in our context
+    result = result.replace(/\\([_*])/g, '$1');
+
+    // Trim whitespace
+    return result.trim();
   }
 
   /**
@@ -235,7 +279,7 @@ export class StorageToMarkdownConverter {
    * Add custom Turndown rules for Confluence elements.
    */
   private addConfluenceRules(): void {
-    // Handle <details> elements (from expand macro)
+    // Handle <details> elements (from expand macro) - convert to bold heading + content
     this.turndown.addRule('details', {
       filter: 'details',
       replacement: (content, node) => {
@@ -243,16 +287,86 @@ export class StorageToMarkdownConverter {
         const summary = details.querySelector('summary');
         const summaryText = summary ? summary.textContent || 'Details' : 'Details';
         const bodyContent = content.replace(summaryText, '').trim();
-        return `\n<details>\n<summary>${summaryText}</summary>\n\n${bodyContent}\n</details>\n`;
+        return `\n**${summaryText}**\n\n${bodyContent}\n`;
       },
     });
 
-    // Handle status spans
+    // Handle <summary> elements - just return the text
+    this.turndown.addRule('summary', {
+      filter: 'summary',
+      replacement: (content) => content,
+    });
+
+    // Handle status spans - convert to text badge
     this.turndown.addRule('status', {
       filter: (node) => {
         return node.nodeName === 'SPAN' &&
-          (node.classList?.contains('status') || /\[.*\]/.test(node.textContent || ''));
+          (node.classList?.contains('status') || /^\[.*\]$/.test(node.textContent || ''));
       },
+      replacement: (content) => content,
+    });
+
+    // Handle table cells - ensure proper spacing
+    this.turndown.addRule('tableCell', {
+      filter: ['th', 'td'],
+      replacement: (content, node) => {
+        const cell = node as Element;
+        const trimmedContent = content.trim().replace(/\n/g, ' ');
+        // Return cell content with pipe delimiter
+        // The GFM plugin will handle the overall table structure
+        return ` ${trimmedContent} |`;
+      },
+    });
+
+    // Handle table rows
+    this.turndown.addRule('tableRow', {
+      filter: 'tr',
+      replacement: (content, node) => {
+        const row = node as Element;
+        const parent = row.parentElement;
+        const isInHeader = parent?.nodeName === 'THEAD';
+        const hasThCells = row.querySelector('th') !== null;
+        const isFirstRow = parent?.firstElementChild === row;
+
+        // Only add separator after the first header row
+        const isHeaderRow = isInHeader || (hasThCells && isFirstRow);
+
+        let result = '|' + content + '\n';
+
+        // Add separator row only after the header row (first row with th cells)
+        if (isHeaderRow && isFirstRow) {
+          const cellCount = row.querySelectorAll('th, td').length;
+          const separator = '|' + ' --- |'.repeat(cellCount);
+          result += separator + '\n';
+        }
+
+        return result;
+      },
+    });
+
+    // Handle table elements
+    this.turndown.addRule('table', {
+      filter: 'table',
+      replacement: (content) => {
+        return '\n\n' + content.trim() + '\n\n';
+      },
+    });
+
+    // Handle tbody/thead - just pass through content
+    this.turndown.addRule('tableBody', {
+      filter: ['thead', 'tbody', 'tfoot'],
+      replacement: (content) => content,
+    });
+
+    // Handle any remaining divs - just return content
+    this.turndown.addRule('div', {
+      filter: 'div',
+      replacement: (content) => content + '\n',
+    });
+
+    // Handle any remaining spans - just return content
+    this.turndown.addRule('span', {
+      filter: 'span',
       replacement: (content) => content,
     });
   }

@@ -1,0 +1,31 @@
+# Source files (compiled output is in out/)
+src/**
+scripts/**
+tsconfig.json
+.mocharc.json
+.vscode-test.mjs
+
+# Development files
+.vscode/**
+.github/**
+.env
+.env.example
+.gitignore
+
+# Test files
+**/*.test.ts
+**/test/**
+
+# Build artifacts not needed
+node_modules/**
+!node_modules/cheerio/**
+!node_modules/turndown/**
+!node_modules/turndown-plugin-gfm/**
+!node_modules/yaml/**
+
+# Documentation (README is kept)
+README.md
+
+# Other
+*.vsix
+.vscode-test/**

@@ -9,14 +9,26 @@ const ATLASSIAN_AUTH_URL = 'https://auth.atlassian.com/authorize';
 const ATLASSIAN_TOKEN_URL = 'https://auth.atlassian.com/oauth/token';
 const ATLASSIAN_RESOURCES_URL = 'https://api.atlassian.com/oauth/token/accessible-resources';
 
-// Scopes needed for Confluence read access
+// Scopes needed for Confluence read access (v2 API granular scopes)
+// See: https://developer.atlassian.com/cloud/confluence/rest/v2/intro/
 const CONFLUENCE_SCOPES = [
+  // Granular scopes for v2 API
+  'read:space:confluence',
+  'read:page:confluence',
+  'read:content:confluence',
+  'read:content-details:confluence',
+  // Classic scopes for search and fallback operations
   'read:confluence-content.all',
   'read:confluence-space.summary',
-  'read:confluence-content.summary',
   'search:confluence',
   'offline_access', // For refresh tokens
 ].join(' ');
+
+// Embedded OAuth credentials injected at build time
+// Set DOCFETCH_CLIENT_ID and DOCFETCH_CLIENT_SECRET environment variables when building
+// For local development without credentials, users will be prompted to enter their own
+const EMBEDDED_CLIENT_ID = process.env.DOCFETCH_CLIENT_ID || '';
+const EMBEDDED_CLIENT_SECRET = process.env.DOCFETCH_CLIENT_SECRET || '';
 
 // Local callback server port
 const CALLBACK_PORT = 27419;
@@ -157,12 +169,26 @@ export class OAuth2Provider implements AuthProvider {
 
   /**
    * Ensure we have OAuth client credentials (Client ID and Secret).
+   * Uses embedded credentials if available, otherwise prompts user.
    */
   private async ensureClientCredentials(): Promise<boolean> {
-    // Check if we have stored client credentials
+    // First, check for embedded credentials (for private distribution)
+    if (EMBEDDED_CLIENT_ID && EMBEDDED_CLIENT_SECRET) {
+      this.clientId = EMBEDDED_CLIENT_ID;
+      this.clientSecret = EMBEDDED_CLIENT_SECRET;
+      return true;
+    }
+
+    // Fall back to user-configured credentials
     const config = vscode.workspace.getConfiguration('docfetch');
     let clientId = config.get<string>('oauth.clientId');
-    let clientSecret = config.get<string>('oauth.clientSecret');
+    let clientSecret: string | undefined;
+
+    // Try to retrieve stored client secret
+    const storedSecret = await this.credentialStore.retrieve('oauth.clientSecret');
+    if (storedSecret?.method === 'apiToken') {
+      clientSecret = storedSecret.token;
+    }
 
     if (!clientId || !clientSecret) {
       // Show setup instructions
@@ -195,6 +221,7 @@ export class OAuth2Provider implements AuthProvider {
         title: 'OAuth 2.0 Setup (Step 1/2)',
         prompt: 'Enter your Atlassian OAuth Client ID',
         placeHolder: 'Client ID from developer.atlassian.com',
+        value: clientId || '',
         ignoreFocusOut: true,
         validateInput: (value) => {
           if (!value || value.length < 10) {
@@ -227,7 +254,7 @@ export class OAuth2Provider implements AuthProvider {
         return false;
       }
 
-      // Store in settings (Client ID is not secret, but we store both for convenience)
+      // Store in settings (Client ID is not secret)
       await config.update('oauth.clientId', clientId, vscode.ConfigurationTarget.Global);
       // Store client secret securely
       await this.credentialStore.store('oauth.clientSecret', {
@@ -235,16 +262,10 @@ export class OAuth2Provider implements AuthProvider {
         email: '',
         token: clientSecret,
       });
-    } else {
-      // Retrieve stored client secret
-      const storedSecret = await this.credentialStore.retrieve('oauth.clientSecret');
-      if (storedSecret?.method === 'apiToken') {
-        clientSecret = storedSecret.token;
-      }
     }
 
     this.clientId = clientId;
-    this.clientSecret = clientSecret || '';
+    this.clientSecret = clientSecret;
 
     return true;
   }
@@ -381,6 +402,8 @@ export class OAuth2Provider implements AuthProvider {
    * Get the Cloud ID for the user's Confluence site.
    */
   private async getCloudIdForSite(accessToken: string): Promise<string | undefined> {
+    console.log('DocFetch: Fetching accessible resources...');
+
     const response = await fetch(ATLASSIAN_RESOURCES_URL, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
@@ -389,47 +412,68 @@ export class OAuth2Provider implements AuthProvider {
     });
 
     if (!response.ok) {
-      throw new Error('Failed to get accessible resources');
+      const errorText = await response.text();
+      console.error('DocFetch: Failed to get accessible resources:', response.status, errorText);
+      throw new Error(`Failed to get accessible resources: ${response.status}`);
     }
 
     const resources = await response.json() as AccessibleResource[];
+    console.log('DocFetch: Found resources:', resources.map(r => ({ name: r.name, url: r.url, id: r.id })));
+
+    if (resources.length === 0) {
+      vscode.window.showErrorMessage(
+        'DocFetch: No Confluence sites found. Make sure your OAuth app has the correct Confluence scopes enabled.'
+      );
+      return undefined;
+    }
 
     // Find the resource matching our base URL
     const baseHostname = new URL(this.baseUrl).hostname;
+    console.log('DocFetch: Looking for site matching:', baseHostname);
+
     const matchingResource = resources.find((r) => {
       const resourceHostname = new URL(r.url).hostname;
       return resourceHostname === baseHostname;
     });
 
     if (matchingResource) {
+      console.log('DocFetch: Found matching site:', matchingResource.name, matchingResource.id);
       return matchingResource.id;
     }
 
-    // If no exact match, return first resource (user can have multiple sites)
-    if (resources.length > 0) {
-      // Let user choose if multiple sites
-      if (resources.length > 1) {
-        const choice = await vscode.window.showQuickPick(
-          resources.map((r) => ({
-            label: r.name,
-            description: r.url,
-            id: r.id,
-          })),
-          {
-            title: 'Select Confluence Site',
-            placeHolder: 'Choose which site to connect to',
-          }
-        );
+    // If no exact match, let user choose
+    console.log('DocFetch: No exact match, prompting user to select...');
 
-        if (choice) {
-          return (choice as { id: string }).id;
-        }
-        return undefined;
+    if (resources.length === 1) {
+      // Only one site, use it but warn the user
+      const useIt = await vscode.window.showWarningMessage(
+        `DocFetch: The URL you entered doesn't match "${resources[0].name}" (${resources[0].url}). Use this site anyway?`,
+        'Yes',
+        'No'
+      );
+
+      if (useIt === 'Yes') {
+        return resources[0].id;
       }
-
-      return resources[0].id;
+      return undefined;
     }
 
+    // Multiple sites, let user choose
+    const choice = await vscode.window.showQuickPick(
+      resources.map((r) => ({
+        label: r.name,
+        description: r.url,
+        id: r.id,
+      })),
+      {
+        title: 'Select Confluence Site',
+        placeHolder: 'Choose which site to connect to',
+      }
+    );
+
+    if (choice) {
+      return (choice as { id: string }).id;
+    }
     return undefined;
   }
 

@@ -5,6 +5,7 @@
   "version": "0.1.0",
   "publisher": "fullerstack-io",
   "license": "MIT",
+  "icon": "DocFetch-icon.png",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -184,9 +185,9 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
+    "compile": "node scripts/build.js",
     "compile:tests": "tsc -p . --outDir out",
-    "watch": "npm run compile -- --watch",
+    "watch": "node scripts/build.js --watch",
     "pretest": "npm run compile && npm run compile:tests",
     "test": "vscode-test",
     "test:unit": "mocha 'src/test/suite/unit/**/*.test.ts'",
@@ -211,6 +212,7 @@
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^2.22.0",
+    "dotenv-cli": "^11.0.0",
     "esbuild": "^0.19.8",
     "eslint": "^8.55.0",
     "glob": "^13.0.0",

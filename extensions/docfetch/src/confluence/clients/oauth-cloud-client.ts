@@ -16,17 +16,22 @@ import { OAuth2Provider } from '../auth/oauth2-provider';
 const ATLASSIAN_API_BASE = 'https://api.atlassian.com/ex/confluence';
 
 /**
- * Cloud API response types
+ * Cloud API v2 response types
  */
 interface CloudPageResponse {
   id: string;
   status: string;
   title: string;
   spaceId: string;
-  version: {
+  parentId?: string;
+  authorId?: string;
+  createdAt?: string;
+  version?: {
     number: number;
-    createdAt: string;
-    authorId: string;
+    message?: string;
+    minorEdit?: boolean;
+    authorId?: string;
+    createdAt?: string;
   };
   body?: {
     storage?: {
@@ -36,7 +41,7 @@ interface CloudPageResponse {
   };
   _links: {
     webui: string;
-    base: string;
+    base?: string;
   };
 }
 
@@ -73,6 +78,42 @@ interface CloudSearchResponse {
   _links?: {
     next?: string;
   };
+}
+
+/**
+ * Legacy (v1) API response types - compatible with v1 OAuth scopes
+ */
+interface LegacyPageResponse {
+  id: string;
+  type: string;
+  status: string;
+  title: string;
+  space: {
+    key: string;
+    name: string;
+  };
+  version: {
+    number: number;
+    when: string;
+    by: {
+      displayName: string;
+    };
+  };
+  body?: {
+    storage?: {
+      value: string;
+    };
+  };
+  _links: {
+    webui: string;
+    base: string;
+  };
+}
+
+interface LegacySpaceResponse {
+  key: string;
+  name: string;
+  type: string;
 }
 
 /**
@@ -162,12 +203,18 @@ export class OAuthCloudConfluenceClient implements IConfluenceClient {
 
   async testConnection(): Promise<boolean> {
     try {
+      console.log('DocFetch: Testing OAuth connection...');
+      const baseUrl = await this.getApiBaseUrl();
+      console.log('DocFetch: API base URL:', baseUrl);
+
+      // Use v2 API for connection test - requires granular scopes
       await this.request<{ results: unknown[] }>('GET', '/wiki/api/v2/spaces', {
         params: { limit: '1' },
       });
+      console.log('DocFetch: Connection test successful!');
       return true;
     } catch (error) {
-      console.error('Connection test failed:', error);
+      console.error('DocFetch: Connection test failed:', error);
       return false;
     }
   }
@@ -175,11 +222,13 @@ export class OAuthCloudConfluenceClient implements IConfluenceClient {
   async getDocumentById(id: string, options?: FetchOptions): Promise<ConfluenceDocument> {
     const params: Record<string, string> = {
       'body-format': 'storage',
+      'include-version': 'true',
     };
 
+    // Use v2 API for pages
     const response = await this.request<CloudPageResponse>('GET', `/wiki/api/v2/pages/${id}`, { params });
 
-    return this.transformPageResponse(response);
+    return this.transformCloudPageResponse(response);
   }
 
   async getDocumentByUrl(url: string, options?: FetchOptions): Promise<ConfluenceDocument> {
@@ -251,6 +300,7 @@ export class OAuthCloudConfluenceClient implements IConfluenceClient {
   }
 
   async getSpaces(): Promise<SpaceInfo[]> {
+    // Use v2 API for spaces
     const response = await this.request<{ results: CloudSpaceResponse[] }>('GET', '/wiki/api/v2/spaces', {
       params: { limit: '100' },
     });
@@ -263,18 +313,40 @@ export class OAuthCloudConfluenceClient implements IConfluenceClient {
   }
 
   /**
-   * Transform Cloud API response to our document format.
+   * Transform Cloud v2 API response to our document format.
    */
-  private transformPageResponse(response: CloudPageResponse): ConfluenceDocument {
+  private transformCloudPageResponse(response: CloudPageResponse): ConfluenceDocument {
+    const createdAt = response.createdAt ? new Date(response.createdAt) : new Date();
+    const updatedAt = response.version?.createdAt ? new Date(response.version.createdAt) : createdAt;
+
     return {
       id: response.id,
       title: response.title,
-      spaceKey: '',
-      spaceName: '',
+      spaceKey: response.spaceId || '',
+      spaceName: '', // v2 API doesn't include space name in page response
+      version: response.version?.number || 1,
+      createdAt,
+      updatedAt,
+      author: response.authorId || '',
+      content: response.body?.storage?.value || '',
+      webUrl: `${this.siteUrl}/wiki${response._links.webui}`,
+      labels: [],
+    };
+  }
+
+  /**
+   * Transform Legacy (v1) API response to our document format.
+   */
+  private transformLegacyPageResponse(response: LegacyPageResponse): ConfluenceDocument {
+    return {
+      id: response.id,
+      title: response.title,
+      spaceKey: response.space?.key || '',
+      spaceName: response.space?.name || '',
       version: response.version.number,
-      createdAt: new Date(response.version.createdAt),
-      updatedAt: new Date(response.version.createdAt),
-      author: response.version.authorId,
+      createdAt: new Date(response.version.when),
+      updatedAt: new Date(response.version.when),
+      author: response.version.by?.displayName || '',
       content: response.body?.storage?.value || '',
       webUrl: `${this.siteUrl}/wiki${response._links.webui}`,
       labels: [],
@@ -335,7 +407,17 @@ export class OAuthCloudConfluenceClient implements IConfluenceClient {
 
     parts.push('type = page');
 
-    return parts.join(' AND ');
+    let cql = parts.join(' AND ');
+
+    // Add ORDER BY clause based on sortBy option
+    if (options?.sortBy === 'lastModified') {
+      cql += ' order by lastmodified desc';
+    } else if (options?.sortBy === 'title') {
+      cql += ' order by title asc';
+    }
+    // 'relevance' is the default, no order by needed
+
+    return cql;
   }
 
   private isCql(query: string): boolean {
