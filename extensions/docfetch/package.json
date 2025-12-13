@@ -2,7 +2,7 @@
   "name": "docfetch",
   "displayName": "DocFetch",
   "description": "Fetch Confluence documents as Markdown for local reference and context",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "fullerstack-io",
   "license": "MIT",
   "icon": "DocFetch-icon.png",
@@ -55,6 +55,11 @@
         "command": "docfetch.openInConfluence",
         "title": "DocFetch: Open in Confluence",
         "icon": "$(link-external)"
+      },
+      {
+        "command": "docfetch.refreshDocuments",
+        "title": "DocFetch: Refresh Documents",
+        "icon": "$(refresh)"
       }
     ],
     "configuration": {
@@ -151,12 +156,17 @@
         {
           "command": "docfetch.searchDocuments",
           "when": "view == docfetch.documents",
-          "group": "navigation"
+          "group": "navigation@1"
         },
         {
           "command": "docfetch.syncAllDocuments",
           "when": "view == docfetch.documents",
-          "group": "navigation"
+          "group": "navigation@2"
+        },
+        {
+          "command": "docfetch.refreshDocuments",
+          "when": "view == docfetch.documents",
+          "group": "navigation@3"
         }
       ],
       "editor/title": [

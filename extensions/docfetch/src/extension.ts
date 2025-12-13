@@ -1,6 +1,10 @@
 import * as vscode from 'vscode';
 import { CredentialStore } from './confluence/auth/credential-store';
 import { fetchByUrl, configureConnection, searchDocuments, syncDocument, syncAllDocuments } from './commands';
+import { DocumentTreeProvider } from './views';
+
+// Tree provider instance for refreshing
+let documentTreeProvider: DocumentTreeProvider;
 
 /**
  * Extension activation.
@@ -12,18 +16,52 @@ export function activate(context: vscode.ExtensionContext): void {
   // Initialize credential store
   CredentialStore.initialize(context);
 
-  // Register commands
+  // Initialize document tree view
+  documentTreeProvider = new DocumentTreeProvider();
+  const treeView = vscode.window.createTreeView('docfetch.documents', {
+    treeDataProvider: documentTreeProvider,
+    showCollapseAll: true,
+  });
+
+  // Register commands with tree refresh
   const commands = [
-    vscode.commands.registerCommand('docfetch.fetchByUrl', fetchByUrl),
+    vscode.commands.registerCommand('docfetch.fetchByUrl', async () => {
+      await fetchByUrl();
+      documentTreeProvider.refresh();
+    }),
     vscode.commands.registerCommand('docfetch.configureConnection', configureConnection),
-    vscode.commands.registerCommand('docfetch.searchDocuments', searchDocuments),
-    vscode.commands.registerCommand('docfetch.syncDocument', syncDocument),
-    vscode.commands.registerCommand('docfetch.syncAllDocuments', syncAllDocuments),
+    vscode.commands.registerCommand('docfetch.searchDocuments', async () => {
+      await searchDocuments();
+      documentTreeProvider.refresh();
+    }),
+    vscode.commands.registerCommand('docfetch.syncDocument', async () => {
+      await syncDocument();
+      documentTreeProvider.refresh();
+    }),
+    vscode.commands.registerCommand('docfetch.syncAllDocuments', async () => {
+      await syncAllDocuments();
+      documentTreeProvider.refresh();
+    }),
     vscode.commands.registerCommand('docfetch.openInConfluence', openInConfluence),
+    vscode.commands.registerCommand('docfetch.refreshDocuments', () => {
+      documentTreeProvider.refresh();
+    }),
   ];
 
-  // Add all commands to subscriptions for cleanup
-  context.subscriptions.push(...commands);
+  // Watch for changes in .docs directory
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+  if (workspaceFolder) {
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(workspaceFolder, '.docs/**/*.md')
+    );
+    watcher.onDidCreate(() => documentTreeProvider.refresh());
+    watcher.onDidDelete(() => documentTreeProvider.refresh());
+    watcher.onDidChange(() => documentTreeProvider.refresh());
+    context.subscriptions.push(watcher);
+  }
+
+  // Add all to subscriptions for cleanup
+  context.subscriptions.push(treeView, ...commands);
 
   // Show welcome message on first activation
   showWelcomeMessage(context);
