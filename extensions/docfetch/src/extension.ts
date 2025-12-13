@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { CredentialStore } from './confluence/auth/credential-store';
-import { fetchByUrl, configureConnection, searchDocuments } from './commands';
+import { fetchByUrl, configureConnection, searchDocuments, syncDocument, syncAllDocuments } from './commands';
 
 /**
  * Extension activation.
@@ -35,39 +35,6 @@ export function activate(context: vscode.ExtensionContext): void {
  */
 export function deactivate(): void {
   console.log('DocFetch extension deactivated');
-}
-
-
-/**
- * Sync the currently open document.
- * TODO: Implement document sync
- */
-async function syncDocument(): Promise<void> {
-  const editor = vscode.window.activeTextEditor;
-  if (!editor) {
-    vscode.window.showWarningMessage('DocFetch: No document is currently open.');
-    return;
-  }
-
-  const filePath = editor.document.uri.fsPath;
-  if (!filePath.includes('.docs')) {
-    vscode.window.showWarningMessage('DocFetch: This file is not a DocFetch document.');
-    return;
-  }
-
-  vscode.window.showInformationMessage(
-    'DocFetch: Document sync coming soon!'
-  );
-}
-
-/**
- * Sync all documents.
- * TODO: Implement bulk sync
- */
-async function syncAllDocuments(): Promise<void> {
-  vscode.window.showInformationMessage(
-    'DocFetch: Bulk sync coming soon!'
-  );
 }
 
 /**

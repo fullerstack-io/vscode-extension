@@ -325,6 +325,9 @@ async function fetchAndSaveDocument(
   const category = categoryChoice.label;
 
   // Fetch the full document
+  let savedFilePath: string | undefined;
+  let savedTitle: string | undefined;
+
   await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
@@ -338,10 +341,14 @@ async function fetchAndSaveDocument(
         progress.report({ message: 'Fetching from Confluence...' });
         const document = await client.getDocumentById(searchResult.id);
 
-        // Check if document already exists
+        // Check if document already exists in metadata
         const existing = await docsManager.getDocumentByConfluenceId(document.id);
 
-        if (existing) {
+        // Also check if the file actually exists on disk
+        const fileExists = existing &&
+          require('fs').existsSync(`${workspaceFolder.uri.fsPath}/.docs/${existing.relativePath}`);
+
+        if (existing && fileExists) {
           const action = await vscode.window.showWarningMessage(
             `Document "${document.title}" already exists. Update it?`,
             'Update',
@@ -360,20 +367,8 @@ async function fetchAndSaveDocument(
           progress.report({ message: 'Saving document...' });
           const metadata = await docsManager.saveDocument(document, connection.id, category);
 
-          // Open the saved file
-          const filePath = vscode.Uri.file(
-            `${workspaceFolder.uri.fsPath}/.docs/${metadata.relativePath}`
-          );
-
-          const openDoc = await vscode.window.showInformationMessage(
-            `DocFetch: Saved "${document.title}"`,
-            'Open File'
-          );
-
-          if (openDoc === 'Open File') {
-            const doc = await vscode.workspace.openTextDocument(filePath);
-            await vscode.window.showTextDocument(doc);
-          }
+          savedFilePath = `${workspaceFolder.uri.fsPath}/.docs/${metadata.relativePath}`;
+          savedTitle = document.title;
         }
       } catch (error) {
         vscode.window.showErrorMessage(
@@ -382,4 +377,18 @@ async function fetchAndSaveDocument(
       }
     }
   );
+
+  // Prompt to open file after progress completes
+  if (savedFilePath && savedTitle) {
+    const openDoc = await vscode.window.showInformationMessage(
+      `DocFetch: Saved "${savedTitle}"`,
+      'Open File'
+    );
+
+    if (openDoc === 'Open File') {
+      const filePath = vscode.Uri.file(savedFilePath);
+      const doc = await vscode.workspace.openTextDocument(filePath);
+      await vscode.window.showTextDocument(doc);
+    }
+  }
 }
